@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Where's My Stuff</title>
+<meta name="theme-color" content="#F2EEE3">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="My Stuff">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <h1>Where's My Stuff</h1>
+  <button id="menu-btn" class="icon-btn" aria-label="Menu">⋮</button>
+</header>
+
+<div id="menu-dropdown" class="dropdown hidden">
+  <button id="export-btn">Export backup</button>
+  <button id="import-btn">Import backup</button>
+</div>
+<input id="import-input" type="file" accept="application/json" class="hidden">
+
+<main id="gallery-view" class="view">
+  <div class="search-bar">
+    <input id="search-input" type="search" placeholder="Search what you're looking for…" autocomplete="off">
+  </div>
+  <div id="gallery-grid" class="gallery-grid"></div>
+  <p id="empty-state" class="empty-state hidden">Nothing stored yet. Tap the + button, snap a photo of a shelf or drawer, and start pinning notes to it.</p>
+</main>
+
+<section id="spot-view" class="view hidden">
+  <div class="spot-header">
+    <button id="back-btn" class="icon-btn" aria-label="Back">←</button>
+    <input id="spot-label-input" type="text" placeholder="Label this spot — e.g. Garage shelf" maxlength="60">
+    <button id="delete-spot-btn" class="icon-btn danger" aria-label="Delete this spot">🗑</button>
+  </div>
+  <div id="image-wrap" class="image-wrap">
+    <img id="spot-image" alt="Storage spot">
+    <div id="pins-layer"></div>
+  </div>
+  <p class="hint">Tap anywhere on the photo to pin a note there.</p>
+</section>
+
+<div id="note-sheet" class="sheet hidden">
+  <div class="sheet-content">
+    <textarea id="note-text" placeholder="What's stored here?" rows="3" maxlength="200"></textarea>
+    <div class="sheet-actions">
+      <button id="note-delete" class="btn danger hidden">Delete</button>
+      <button id="note-cancel" class="btn ghost">Cancel</button>
+      <button id="note-save" class="btn primary">Save</button>
+    </div>
+  </div>
+</div>
+
+<button id="add-btn" class="fab" aria-label="Add new spot">+</button>
+<input id="camera-input" type="file" accept="image/*" capture="environment" class="hidden">
+
+<script src="app.js" defer></script>
+</body>
+</html>
