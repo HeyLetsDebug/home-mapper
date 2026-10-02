@@ -101,6 +101,9 @@ let pendingPinCoords = null;
 let galleryObjectUrls = [];
 let currentSpotImageUrl = null;
 let spotDirty = false;
+let viewMode = 'all';
+let deferredInstallPrompt = null;
+let aiBusy = false;
 
 const galleryView = document.getElementById('gallery-view');
 const spotView = document.getElementById('spot-view');
@@ -113,6 +116,22 @@ const backBtn = document.getElementById('back-btn');
 const spotLabelInput = document.getElementById('spot-label-input');
 const saveSpotBtn = document.getElementById('save-spot-btn');
 const deleteSpotBtn = document.getElementById('delete-spot-btn');
+const favoriteBtn = document.getElementById('favorite-btn');
+const subspotBtn = document.getElementById('subspot-btn');
+const parentSpotSelect = document.getElementById('parent-spot-select');
+const spotBreadcrumb = document.getElementById('spot-breadcrumb');
+const aiBtn = document.getElementById('ai-btn');
+const aiSheet = document.getElementById('ai-sheet');
+const aiRun = document.getElementById('ai-run');
+const aiCancel = document.getElementById('ai-cancel');
+const aiResults = document.getElementById('ai-results');
+const aiSettingsBtn = document.getElementById('ai-settings-btn');
+const installBtn = document.getElementById('install-btn');
+const navHome = document.getElementById('nav-home');
+const navFavorites = document.getElementById('nav-favorites');
+const navInstall = document.getElementById('nav-install');
+const subspotInput = document.getElementById('subspot-input');
+const noteSubspot = document.getElementById('note-subspot');
 const spotImage = document.getElementById('spot-image');
 const pinsLayer = document.getElementById('pins-layer');
 const imageWrap = document.getElementById('image-wrap');
@@ -129,18 +148,72 @@ const importBtn = document.getElementById('import-btn');
 const importInput = document.getElementById('import-input');
 const pdfReport = document.getElementById('pdf-report');
 
+function parentChain(spot) {
+  const chain = [];
+  let cursor = spot;
+  const seen = new Set();
+  while (cursor && cursor.parentId && !seen.has(cursor.parentId)) {
+    seen.add(cursor.parentId);
+    cursor = spots.find((s) => s.id === cursor.parentId);
+    if (cursor) chain.unshift(cursor);
+  }
+  return chain;
+}
+
+function breadcrumbText(spot) {
+  return [...parentChain(spot), spot].map((s) => s.label || 'Untitled spot').join(' › ');
+}
+
+function setViewMode(mode) {
+  viewMode = mode;
+  navHome.classList.toggle('active', mode === 'all');
+  navFavorites.classList.toggle('active', mode === 'favorites');
+  renderGallery(searchInput.value);
+}
+
+function renderParentOptions() {
+  const selected = currentSpot?.parentId || '';
+  parentSpotSelect.innerHTML = '<option value="">Top-level location</option>';
+  spots.filter((s) => s.id !== currentSpot?.id).forEach((spot) => {
+    const option = document.createElement('option');
+    option.value = spot.id;
+    option.textContent = breadcrumbText(spot);
+    option.selected = spot.id === selected;
+    parentSpotSelect.appendChild(option);
+  });
+}
+
+function updateFavoriteButton() {
+  favoriteBtn.textContent = currentSpot?.favorite ? '★' : '☆';
+  favoriteBtn.classList.toggle('selected', !!currentSpot?.favorite);
+}
+
+function setAISettings() {
+  const key = prompt('Enter your OpenAI API key for optional AI Assist. It is stored only on this device. Leave blank to disable AI Assist.');
+  if (key === null) return;
+  if (!key.trim()) {
+    localStorage.removeItem('homeInventoryAiKey');
+    alert('AI Assist disabled.');
+    return;
+  }
+  localStorage.setItem('homeInventoryAiKey', key.trim());
+  alert('AI Assist is ready on this device.');
+}
+
 function renderGallery(filterText = '') {
   galleryObjectUrls.forEach((u) => URL.revokeObjectURL(u));
   galleryObjectUrls = [];
 
   const q = filterText.trim().toLowerCase();
-  const filtered = !q ? spots : spots.filter((s) =>
+  const modeFiltered = viewMode === 'favorites' ? spots.filter((s) => s.favorite) : spots;
+  const filtered = !q ? modeFiltered : modeFiltered.filter((s) =>
     (s.label || '').toLowerCase().includes(q) ||
-    s.pins.some((p) => p.note.toLowerCase().includes(q))
+    s.pins.some((p) => p.note.toLowerCase().includes(q)) ||
+    breadcrumbText(s).toLowerCase().includes(q)
   );
 
   galleryGrid.innerHTML = '';
-  emptyState.classList.toggle('hidden', spots.length > 0);
+  emptyState.classList.toggle('hidden', modeFiltered.length > 0);
 
   if (q && filtered.length === 0) {
     const msg = document.createElement('p');
@@ -153,6 +226,7 @@ function renderGallery(filterText = '') {
   filtered.forEach((spot) => {
     const card = document.createElement('div');
     card.className = 'spot-card';
+    if (spot.favorite) card.classList.add('is-favorite');
     card.style.setProperty('--rot', rotationFor(spot.id) + 'deg');
 
     const thumbWrap = document.createElement('div');
@@ -173,9 +247,27 @@ function renderGallery(filterText = '') {
     }
     card.appendChild(thumbWrap);
 
+    const favorite = document.createElement('button');
+    favorite.className = 'card-favorite';
+    favorite.textContent = spot.favorite ? '★' : '☆';
+    favorite.setAttribute('aria-label', spot.favorite ? 'Remove favorite' : 'Add favorite');
+    favorite.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      spot.favorite = !spot.favorite;
+      await dbPut(spot);
+      renderGallery(searchInput.value);
+    });
+    thumbWrap.appendChild(favorite);
+
     const caption = document.createElement('div');
     caption.className = 'caption';
     caption.textContent = spot.label || 'Untitled spot';
+    if (spot.parentId) {
+      const parent = document.createElement('small');
+      parent.className = 'card-parent';
+      parent.textContent = breadcrumbText(spot).replace((spot.label || 'Untitled spot'), '').replace(/ › $/, '');
+      caption.appendChild(parent);
+    }
     card.appendChild(caption);
 
     card.addEventListener('click', () => openSpot(spot.id));
@@ -231,6 +323,10 @@ function showGallery() {
 function openSpot(id) {
   currentSpot = spots.find((s) => s.id === id);
   spotLabelInput.value = currentSpot.label || '';
+  renderParentOptions();
+  parentSpotSelect.value = currentSpot.parentId || '';
+  spotBreadcrumb.textContent = currentSpot.parentId ? breadcrumbText(currentSpot) : '';
+  updateFavoriteButton();
   spotDirty = false;
   updateSaveButton();
   if (currentSpotImageUrl) URL.revokeObjectURL(currentSpotImageUrl);
@@ -243,7 +339,7 @@ function openSpot(id) {
 
 async function createNewSpot(file) {
   const blob = await resizeImage(file);
-  const spot = { id: uid(), imageBlob: blob, label: '', pins: [], createdAt: Date.now() };
+  const spot = { id: uid(), imageBlob: blob, label: '', pins: [], parentId: cameraInput.dataset.parentId || null, favorite: false, createdAt: Date.now() };
   spots.unshift(spot);
   await dbPut(spot);
   openSpot(spot.id);
@@ -253,6 +349,7 @@ function openNoteSheet(pin) {
   editingPin = pin || null;
   noteText.value = pin ? pin.note : '';
   noteDelete.classList.toggle('hidden', !pin);
+  noteSubspot.classList.toggle('hidden', !pin);
   noteSheet.classList.remove('hidden');
   setTimeout(() => noteText.focus(), 50);
 }
@@ -262,6 +359,7 @@ function closeNoteSheet() {
   editingPin = null;
   pendingPinCoords = null;
   noteText.value = '';
+  noteSubspot.classList.add('hidden');
 }
 
 function saveNote() {
@@ -390,6 +488,27 @@ cameraInput.addEventListener('change', async (e) => {
   cameraInput.value = '';
 });
 
+navHome.addEventListener('click', () => setViewMode('all'));
+navFavorites.addEventListener('click', () => setViewMode('favorites'));
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  installBtn.classList.remove('hidden');
+  navInstall.classList.remove('hidden');
+});
+
+async function installApp() {
+  if (!deferredInstallPrompt) return;
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  installBtn.classList.add('hidden');
+  navInstall.classList.add('hidden');
+}
+installBtn.addEventListener('click', installApp);
+navInstall.addEventListener('click', installApp);
+
 backBtn.addEventListener('click', async () => {
   if (!spotDirty) {
     showGallery();
@@ -406,7 +525,109 @@ backBtn.addEventListener('click', async () => {
 
 saveSpotBtn.addEventListener('click', saveCurrentSpot);
 
+favoriteBtn.addEventListener('click', () => {
+  if (!currentSpot) return;
+  currentSpot.favorite = !currentSpot.favorite;
+  updateFavoriteButton();
+  markSpotDirty();
+});
+
+parentSpotSelect.addEventListener('change', () => {
+  if (!currentSpot) return;
+  currentSpot.parentId = parentSpotSelect.value || null;
+  spotBreadcrumb.textContent = currentSpot.parentId ? breadcrumbText(currentSpot) : '';
+  markSpotDirty();
+});
+
+subspotBtn.addEventListener('click', () => {
+  if (!currentSpot) return;
+  subspotInput.dataset.parentId = currentSpot.id;
+  subspotInput.click();
+});
+
+subspotInput.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const blob = await resizeImage(file);
+    const spot = { id: uid(), imageBlob: blob, label: '', pins: [], parentId: subspotInput.dataset.parentId || null, favorite: false, createdAt: Date.now() };
+    spots.unshift(spot);
+    await dbPut(spot);
+    openSpot(spot.id);
+  } catch (err) {
+    alert("Couldn't load that photo — try a different one.");
+  }
+  subspotInput.value = '';
+});
+
 spotLabelInput.addEventListener('input', markSpotDirty);
+
+aiBtn.addEventListener('click', () => {
+  aiResults.classList.add('hidden');
+  aiResults.innerHTML = '';
+  aiSheet.classList.remove('hidden');
+});
+
+aiCancel.addEventListener('click', () => aiSheet.classList.add('hidden'));
+aiSettingsBtn.addEventListener('click', () => {
+  menuDropdown.classList.add('hidden');
+  setAISettings();
+});
+
+aiRun.addEventListener('click', async () => {
+  if (aiBusy || !currentSpot) return;
+  const key = localStorage.getItem('homeInventoryAiKey');
+  if (!key) {
+    setAISettings();
+    return;
+  }
+  aiBusy = true;
+  aiRun.disabled = true;
+  aiRun.textContent = 'Analyzing…';
+  try {
+    const image = await blobToBase64(currentSpot.imageBlob);
+    const response = await fetch('https://api.openai.com/v1/responses', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+      body: JSON.stringify({
+        model: 'gpt-6-luna',
+        input: [{ role: 'user', content: [
+          { type: 'input_text', text: 'Look at this storage photo. Suggest up to 8 clearly visible household items that could be useful as inventory notes. Return only a simple JSON array of strings. Do not guess hidden or unreadable items.' },
+          { type: 'input_image', image_url: image }
+        ] }]
+      })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || 'AI request failed');
+    const raw = data.output_text || '';
+    let suggestions = [];
+    try { suggestions = JSON.parse(raw); } catch { suggestions = raw.split('\\n').map((x) => x.replace(/^[-*•\\d.]+\\s*/, '').trim()).filter(Boolean); }
+    aiResults.innerHTML = '';
+    if (!suggestions.length) {
+      aiResults.textContent = 'No clear items detected.';
+    } else {
+      suggestions.slice(0, 8).forEach((suggestion) => {
+        const button = document.createElement('button');
+        button.className = 'ai-suggestion';
+        button.textContent = suggestion;
+        button.addEventListener('click', () => {
+          noteText.value = suggestion;
+          aiSheet.classList.add('hidden');
+          pendingPinCoords = null;
+          openNoteSheet(null);
+        });
+        aiResults.appendChild(button);
+      });
+    }
+    aiResults.classList.remove('hidden');
+  } catch (err) {
+    alert('AI Assist failed: ' + err.message);
+  } finally {
+    aiBusy = false;
+    aiRun.disabled = false;
+    aiRun.textContent = 'Analyze photo';
+  }
+});
 
 deleteSpotBtn.addEventListener('click', async () => {
   if (!confirm('Delete this spot and all its notes?')) return;
@@ -445,8 +666,10 @@ exportPdfBtn.addEventListener('click', exportPdfReport);
 
 exportBtn.addEventListener('click', async () => {
   menuDropdown.classList.add('hidden');
+  if (currentSpot && spotDirty) await saveCurrentSpot();
   const data = await Promise.all(spots.map(async (s) => ({ ...s, imageBlob: await blobToBase64(s.imageBlob) })));
-  const blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+  const backup = { version: 2, app: "Where's My Stuff", exportedAt: new Date().toISOString(), spots: data };
+  const blob = new Blob([JSON.stringify(backup)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -467,14 +690,31 @@ importInput.addEventListener('change', async (e) => {
   if (!file) return;
   try {
     const text = await file.text();
-    const data = JSON.parse(text);
-    for (const item of data) {
+    const parsed = JSON.parse(text);
+    const data = Array.isArray(parsed) ? parsed : parsed.spots;
+    if (!Array.isArray(data) || !data.length) throw new Error('Invalid or empty backup.');
+    const valid = data.filter((item) => item && item.id && item.imageBlob && Array.isArray(item.pins));
+    if (!valid.length) throw new Error('No valid locations found.');
+    const replace = confirm('Restore ' + valid.length + ' location(s). Press OK to replace your current inventory, or Cancel to merge it.');
+    if (replace) {
+      const existing = await dbGetAll();
+      for (const item of existing) await dbDelete(item.id);
+    }
+    for (const item of valid) {
       const blob = await base64ToBlob(item.imageBlob);
-      await dbPut({ ...item, imageBlob: blob });
+      await dbPut({
+        id: item.id,
+        imageBlob: blob,
+        label: item.label || '',
+        pins: Array.isArray(item.pins) ? item.pins : [],
+        parentId: item.parentId || null,
+        favorite: !!item.favorite,
+        createdAt: item.createdAt || Date.now()
+      });
     }
     spots = await dbGetAll();
-    renderGallery(searchInput.value);
-    alert('Backup imported.');
+    setViewMode('all');
+    alert('Backup restored successfully.');
   } catch (err) {
     alert("Couldn't read that backup file.");
   }
@@ -483,6 +723,7 @@ importInput.addEventListener('change', async (e) => {
 
 (async function init() {
   spots = await dbGetAll();
+  spots.forEach((spot) => { if (!Array.isArray(spot.pins)) spot.pins = []; if (!('favorite' in spot)) spot.favorite = false; if (!('parentId' in spot)) spot.parentId = null; });
   renderGallery();
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
