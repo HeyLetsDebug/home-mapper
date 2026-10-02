@@ -57,26 +57,73 @@ function rotationFor(id) {
   return (hash % 5) - 2;
 }
 
-function resizeImage(file, maxDim = 1400, quality = 0.82) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      let { width, height } = img;
+async function resizeImage(file, maxDim = 1400, quality = 0.82) {
+  if (!file || !file.size) throw new Error('empty image');
+
+  if (typeof createImageBitmap === 'function') {
+    try {
+      const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+      let width = bitmap.width;
+      let height = bitmap.height;
       if (width > maxDim || height > maxDim) {
-        if (width >= height) { height = Math.round(height * (maxDim / width)); width = maxDim; }
-        else { width = Math.round(width * (maxDim / height)); height = maxDim; }
+        if (width >= height) {
+          height = Math.round(height * (maxDim / width));
+          width = maxDim;
+        } else {
+          width = Math.round(width * (maxDim / height));
+          height = maxDim;
+        }
       }
       const canvas = document.createElement('canvas');
       canvas.width = width;
       canvas.height = height;
-      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-      canvas.toBlob((blob) => {
-        URL.revokeObjectURL(url);
-        blob ? resolve(blob) : reject(new Error('toBlob failed'));
-      }, 'image/jpeg', quality);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('canvas unavailable');
+      ctx.drawImage(bitmap, 0, 0, width, height);
+      bitmap.close();
+      const blob = await new Promise((resolve) => {
+        canvas.toBlob(resolve, 'image/jpeg', quality);
+      });
+      if (blob) return blob;
+    } catch (err) {}
+  }
+
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    let settled = false;
+    const finish = (error, blob) => {
+      if (settled) return;
+      settled = true;
+      URL.revokeObjectURL(url);
+      error ? reject(error) : resolve(blob);
     };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image load failed')); };
+    img.onload = () => {
+      try {
+        let { width, height } = img;
+        if (width > maxDim || height > maxDim) {
+          if (width >= height) {
+            height = Math.round(height * (maxDim / width));
+            width = maxDim;
+          } else {
+            width = Math.round(width * (maxDim / height));
+            height = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return finish(new Error('canvas unavailable'));
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob((blob) => {
+          blob ? finish(null, blob) : finish(new Error('toBlob failed'));
+        }, 'image/jpeg', quality);
+      } catch (err) {
+        finish(err);
+      }
+    };
+    img.onerror = () => finish(new Error('image load failed'));
     img.src = url;
   });
 }
@@ -103,6 +150,7 @@ let currentSpotImageUrl = null;
 let spotDirty = false;
 let viewMode = 'all';
 let deferredInstallPrompt = null;
+let captureBusy = false;
 
 const galleryView = document.getElementById('gallery-view');
 const spotView = document.getElementById('spot-view');
@@ -360,11 +408,18 @@ function openSpot(id) {
   spotView.classList.remove('hidden');
 }
 
-async function createNewSpot(file) {
-  const blob = await resizeImage(file);
-  const spot = { id: uid(), imageBlob: blob, label: '', pins: [], parentId: cameraInput.dataset.parentId || null, favorite: false, createdAt: Date.now() };
-  spots.unshift(spot);
+async function createNewSpot(file, parentId = null) {
+  let blob;
+  try {
+    blob = await resizeImage(file);
+  } catch (err) {
+    blob = file.slice(0, file.size, file.type || 'image/jpeg');
+  }
+  if (!blob || !blob.size) throw new Error('image could not be stored');
+  const spot = { id: uid(), imageBlob: blob, label: '', pins: [], parentId, locationText: '', favorite: false, createdAt: Date.now() };
   await dbPut(spot);
+  spots.unshift(spot);
+  renderGallery(searchInput.value);
   openSpot(spot.id);
 }
 
@@ -512,17 +567,30 @@ async function exportPdfReport() {
     printWindow.addEventListener('afterprint', () => printWindow.close(), { once: true });
   }, 250);
 }
-addBtn.addEventListener('click', () => cameraInput.click());
+addBtn.addEventListener('click', () => {
+  if (captureBusy) return;
+  cameraInput.value = '';
+  cameraInput.click();
+});
 
 cameraInput.addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  try {
-    await createNewSpot(file);
-  } catch (err) {
-    alert("Couldn't load that photo — try a different one.");
-  }
+  const file = e.target.files?.[0];
   cameraInput.value = '';
+  if (!file || captureBusy) return;
+  captureBusy = true;
+  addBtn.disabled = true;
+  const originalText = addBtn.textContent;
+  addBtn.textContent = '…';
+  try {
+    await createNewSpot(file, cameraInput.dataset.parentId || null);
+  } catch (err) {
+    alert("Couldn't save that photo. Please try again.");
+  } finally {
+    captureBusy = false;
+    addBtn.disabled = false;
+    addBtn.textContent = originalText;
+    cameraInput.dataset.parentId = '';
+  }
 });
 
 navHome.addEventListener('click', () => setViewMode('all'));
@@ -594,18 +662,16 @@ subspotBtn.addEventListener('click', () => {
 });
 
 subspotInput.addEventListener('change', async (e) => {
-  const file = e.target.files[0];
+  const file = e.target.files?.[0];
+  subspotInput.value = '';
   if (!file) return;
   try {
-    const blob = await resizeImage(file);
-    const spot = { id: uid(), imageBlob: blob, label: '', pins: [], parentId: subspotInput.dataset.parentId || null, favorite: false, createdAt: Date.now() };
-    spots.unshift(spot);
-    await dbPut(spot);
-    openSpot(spot.id);
+    await createNewSpot(file, subspotInput.dataset.parentId || null);
   } catch (err) {
-    alert("Couldn't load that photo — try a different one.");
+    alert("Couldn't save that photo. Please try again.");
+  } finally {
+    subspotInput.dataset.parentId = '';
   }
-  subspotInput.value = '';
 });
 
 spotLabelInput.addEventListener('input', markSpotDirty);
