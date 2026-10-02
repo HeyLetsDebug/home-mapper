@@ -366,3 +366,21 @@ body.printing-report #pdf-report {
 @media (prefers-reduced-motion: reduce) {
   .spot-card, .fab, .pin { transition: none; }
 }
+
+/* Mobile-friendly spot editor */
+.spot-header { display:block; padding:8px 12px 12px; }
+.spot-toolbar { display:flex; align-items:center; gap:2px; min-height:48px; }
+.spot-toolbar-title { flex:1; min-width:0; font-size:.9rem; font-weight:600; color:var(--ink-soft); padding-left:4px; }
+.spot-fields { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:4px; }
+.field { display:flex; flex-direction:column; gap:4px; min-width:0; }
+.field span { font-size:.68rem; color:var(--ink-soft); font-weight:500; padding-left:2px; }
+.field input { width:100%; min-width:0; min-height:42px; border:1px solid var(--line); border-radius:10px; background:var(--surface); color:var(--ink); padding:9px 11px; font-size:.88rem; }
+.field input:focus { outline:none; border-color:var(--pin); box-shadow:0 0 0 2px rgba(46,74,59,.08); }
+#parent-spot-input::placeholder { color:var(--ink-soft); }
+@media (max-width:520px) {
+  .spot-toolbar-title { font-size:.82rem; }
+  .spot-toolbar .icon-btn { min-width:40px; }
+  .spot-save { min-width:58px; padding:8px 9px; }
+  .spot-fields { grid-template-columns:1fr; gap:6px; }
+}
+@media (min-width:521px) { .spot-fields { max-width:760px; } }
