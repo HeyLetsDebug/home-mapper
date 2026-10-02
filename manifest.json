@@ -1,10 +1,12 @@
 {
   "name": "Where's My Stuff",
   "short_name": "My Stuff",
-  "description": "A visual map of what's stored where around the house.",
+  "description": "A fast, visual memory of what is stored where around the house.",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "prefer_related_applications": false,
   "background_color": "#F2EEE3",
   "theme_color": "#F2EEE3",
   "orientation": "portrait",
