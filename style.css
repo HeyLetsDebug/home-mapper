@@ -65,11 +65,7 @@ input, textarea { font-family: inherit; }
 .bottom-nav { position:fixed; bottom:0; left:0; right:0; height:70px; padding-bottom:env(safe-area-inset-bottom); background:rgba(255,253,247,.96); border-top:1px solid var(--line); display:flex; justify-content:center; gap:10px; z-index:18; backdrop-filter:blur(12px); }
 .bottom-nav button { flex:1; max-width:150px; border:0; background:none; color:var(--ink-soft); font-size:1.25rem; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; }
 .bottom-nav button span { font-size:.68rem; }
-.bottom-nav button.active { color:var(--pin); font-weight:700; }
-.ai-results { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
-.ai-suggestion { border:1px solid var(--line); background:var(--paper); color:var(--ink); border-radius:999px; padding:9px 12px; }
-.sheet-help { color:var(--ink-soft); font-size:.85rem; line-height:1.45; }
-@media (max-width:420px) { #parent-spot-select { max-width:112px; } .spot-header { gap:2px; } .spot-save { min-width:54px; padding:8px 8px; } }
+.bottom-nav button.active { color:var(--pin); font-weight:700; }@media (max-width:420px) { #parent-spot-select { max-width:112px; } .spot-header { gap:2px; } .spot-save { min-width:54px; padding:8px 8px; } }
 
 .dropdown {
   position: absolute;
