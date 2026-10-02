@@ -39,13 +39,25 @@
 
 <section id="spot-view" class="view hidden">
   <div class="spot-header">
-    <button id="back-btn" class="icon-btn" aria-label="Back">←</button>
-    <input id="spot-label-input" type="text" placeholder="Label this spot — e.g. Garage shelf" maxlength="60">
-    <select id="parent-spot-select" aria-label="Parent location"><option value="">Top-level location</option></select>
-    <button id="save-spot-btn" class="btn primary spot-save">Saved</button>
-    <button id="favorite-btn" class="icon-btn" aria-label="Favorite this spot">☆</button>
-    <button id="subspot-btn" class="icon-btn" aria-label="Add sub-location">＋</button>
-    <button id="delete-spot-btn" class="icon-btn danger" aria-label="Delete this spot">🗑</button>
+    <div class="spot-toolbar">
+      <button id="back-btn" class="icon-btn" aria-label="Back">←</button>
+      <div class="spot-toolbar-title">Location details</div>
+      <button id="save-spot-btn" class="btn primary spot-save">Saved</button>
+      <button id="favorite-btn" class="icon-btn" aria-label="Favorite this spot">☆</button>
+      <button id="subspot-btn" class="icon-btn" aria-label="Add sub-location">＋</button>
+      <button id="delete-spot-btn" class="icon-btn danger" aria-label="Delete this spot">🗑</button>
+    </div>
+    <div class="spot-fields">
+      <label class="field">
+        <span>Spot name</span>
+        <input id="spot-label-input" type="text" placeholder="e.g. Blue box, top shelf" maxlength="60" autocomplete="off">
+      </label>
+      <label class="field">
+        <span>Location</span>
+        <input id="parent-spot-input" type="text" list="location-suggestions" placeholder="Top-level location — e.g. Bedroom" maxlength="80" autocomplete="off">
+        <datalist id="location-suggestions"></datalist>
+      </label>
+    </div>
   </div>
   <div id="image-wrap" class="image-wrap">
     <img id="spot-image" alt="Storage spot">
