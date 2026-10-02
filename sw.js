@@ -1,4 +1,4 @@
-const CACHE_NAME = 'home-inventory-v5'; // bump this (v2, v3...) whenever you update the app files
+const CACHE_NAME = 'home-inventory-v6'; // bump this (v2, v3...) whenever you update the app files
 
 const ASSETS = [
   '.',
