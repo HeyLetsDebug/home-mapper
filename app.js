@@ -611,10 +611,10 @@ aiRun.addEventListener('click', async () => {
         button.className = 'ai-suggestion';
         button.textContent = suggestion;
         button.addEventListener('click', () => {
-          noteText.value = suggestion;
           aiSheet.classList.add('hidden');
           pendingPinCoords = null;
           openNoteSheet(null);
+          noteText.value = suggestion;
         });
         aiResults.appendChild(button);
       });
