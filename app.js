@@ -117,7 +117,8 @@ const saveSpotBtn = document.getElementById('save-spot-btn');
 const deleteSpotBtn = document.getElementById('delete-spot-btn');
 const favoriteBtn = document.getElementById('favorite-btn');
 const subspotBtn = document.getElementById('subspot-btn');
-const parentSpotSelect = document.getElementById('parent-spot-select');
+const parentSpotInput = document.getElementById('parent-spot-input');
+const locationSuggestions = document.getElementById('location-suggestions');
 const spotBreadcrumb = document.getElementById('spot-breadcrumb');
 const installBtn = document.getElementById('install-btn');
 const navHome = document.getElementById('nav-home');
@@ -154,7 +155,44 @@ function parentChain(spot) {
 }
 
 function breadcrumbText(spot) {
-  return [...parentChain(spot), spot].map((s) => s.label || 'Untitled spot').join(' › ');
+  const location = (spot.locationText || '').trim();
+  const chain = parentChain(spot);
+  const parts = [];
+  if (location && !chain.length) parts.push(location);
+  parts.push(...chain.map((s) => s.label || 'Untitled spot'));
+  parts.push(spot.label || 'Untitled spot');
+  return parts.join(' › ');
+}
+
+function locationOptions() {
+  const values = [];
+  const seen = new Set();
+  spots.forEach((spot) => {
+    const label = (spot.label || '').trim();
+    if (!label || seen.has(label.toLowerCase())) return;
+    seen.add(label.toLowerCase());
+    values.push(label);
+  });
+  return values.sort((a, b) => a.localeCompare(b));
+}
+
+function renderLocationSuggestions() {
+  locationSuggestions.innerHTML = '';
+  locationOptions().forEach((label) => {
+    const option = document.createElement('option');
+    option.value = label;
+    locationSuggestions.appendChild(option);
+  });
+}
+
+function updateLocationInput() {
+  if (!currentSpot) return;
+  if (currentSpot.parentId) {
+    const parent = spots.find((s) => s.id === currentSpot.parentId);
+    parentSpotInput.value = parent ? (parent.label || '') : '';
+  } else {
+    parentSpotInput.value = currentSpot.locationText || '';
+  }
 }
 
 function setViewMode(mode) {
@@ -165,15 +203,8 @@ function setViewMode(mode) {
 }
 
 function renderParentOptions() {
-  const selected = currentSpot?.parentId || '';
-  parentSpotSelect.innerHTML = '<option value="">Top-level location</option>';
-  spots.filter((s) => s.id !== currentSpot?.id).forEach((spot) => {
-    const option = document.createElement('option');
-    option.value = spot.id;
-    option.textContent = breadcrumbText(spot);
-    option.selected = spot.id === selected;
-    parentSpotSelect.appendChild(option);
-  });
+  renderLocationSuggestions();
+  updateLocationInput();
 }
 
 function updateFavoriteButton() {
@@ -286,6 +317,18 @@ function markSpotDirty() {
 async function saveCurrentSpot() {
   if (!currentSpot) return;
   currentSpot.label = spotLabelInput.value.trim();
+  const locationValue = parentSpotInput.value.trim();
+  const matchingParent = spots.find((s) =>
+    s.id !== currentSpot.id &&
+    (s.label || '').trim().toLowerCase() === locationValue.toLowerCase()
+  );
+  if (matchingParent) {
+    currentSpot.parentId = matchingParent.id;
+    currentSpot.locationText = '';
+  } else {
+    currentSpot.parentId = null;
+    currentSpot.locationText = locationValue;
+  }
   await dbPut(currentSpot);
   spotDirty = false;
   updateSaveButton();
@@ -305,8 +348,7 @@ function openSpot(id) {
   currentSpot = spots.find((s) => s.id === id);
   spotLabelInput.value = currentSpot.label || '';
   renderParentOptions();
-  parentSpotSelect.value = currentSpot.parentId || '';
-  spotBreadcrumb.textContent = currentSpot.parentId ? breadcrumbText(currentSpot) : '';
+  spotBreadcrumb.textContent = (currentSpot.parentId || currentSpot.locationText) ? breadcrumbText(currentSpot) : '';
   updateFavoriteButton();
   spotDirty = false;
   updateSaveButton();
@@ -527,10 +569,21 @@ favoriteBtn.addEventListener('click', () => {
   markSpotDirty();
 });
 
-parentSpotSelect.addEventListener('change', () => {
+parentSpotInput.addEventListener('input', () => {
   if (!currentSpot) return;
-  currentSpot.parentId = parentSpotSelect.value || null;
-  spotBreadcrumb.textContent = currentSpot.parentId ? breadcrumbText(currentSpot) : '';
+  const value = parentSpotInput.value.trim();
+  const matchingParent = spots.find((s) =>
+    s.id !== currentSpot.id &&
+    (s.label || '').trim().toLowerCase() === value.toLowerCase()
+  );
+  if (matchingParent) {
+    currentSpot.parentId = matchingParent.id;
+    currentSpot.locationText = '';
+  } else {
+    currentSpot.parentId = null;
+    currentSpot.locationText = value;
+  }
+  spotBreadcrumb.textContent = value ? breadcrumbText(currentSpot) : (currentSpot.label ? currentSpot.label : '');
   markSpotDirty();
 });
 
@@ -636,6 +689,7 @@ importInput.addEventListener('change', async (e) => {
         label: item.label || '',
         pins: Array.isArray(item.pins) ? item.pins : [],
         parentId: item.parentId || null,
+        locationText: item.locationText || '',
         favorite: !!item.favorite,
         createdAt: item.createdAt || Date.now()
       });
@@ -651,7 +705,12 @@ importInput.addEventListener('change', async (e) => {
 
 (async function init() {
   spots = await dbGetAll();
-  spots.forEach((spot) => { if (!Array.isArray(spot.pins)) spot.pins = []; if (!('favorite' in spot)) spot.favorite = false; if (!('parentId' in spot)) spot.parentId = null; });
+  spots.forEach((spot) => {
+    if (!Array.isArray(spot.pins)) spot.pins = [];
+    if (!('favorite' in spot)) spot.favorite = false;
+    if (!('parentId' in spot)) spot.parentId = null;
+    if (!('locationText' in spot)) spot.locationText = '';
+  });
   renderGallery();
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
