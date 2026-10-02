@@ -8,6 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="My Stuff">
+<meta name="mobile-web-app-capable" content="yes">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="style.css">
@@ -22,9 +23,12 @@
 <div id="menu-dropdown" class="dropdown hidden">
   <button id="export-pdf-btn">Export PDF report</button>
   <button id="export-btn">Export backup</button>
-  <button id="import-btn">Import backup</button>
+  <button id="import-btn">Import / restore backup</button>
+  <button id="ai-settings-btn">AI Assist settings</button>
+  <button id="install-btn" class="hidden">Install app</button>
 </div>
 <input id="import-input" type="file" accept="application/json" class="hidden">
+<input id="subspot-input" type="file" accept="image/*" capture="environment" class="hidden">
 
 <main id="gallery-view" class="view">
   <div class="search-bar">
@@ -38,13 +42,18 @@
   <div class="spot-header">
     <button id="back-btn" class="icon-btn" aria-label="Back">←</button>
     <input id="spot-label-input" type="text" placeholder="Label this spot — e.g. Garage shelf" maxlength="60">
+    <select id="parent-spot-select" aria-label="Parent location"><option value="">Top-level location</option></select>
     <button id="save-spot-btn" class="btn primary spot-save">Saved</button>
+    <button id="ai-btn" class="icon-btn" aria-label="AI suggestions">✨</button>
+    <button id="favorite-btn" class="icon-btn" aria-label="Favorite this spot">☆</button>
+    <button id="subspot-btn" class="icon-btn" aria-label="Add sub-location">＋</button>
     <button id="delete-spot-btn" class="icon-btn danger" aria-label="Delete this spot">🗑</button>
   </div>
   <div id="image-wrap" class="image-wrap">
     <img id="spot-image" alt="Storage spot">
     <div id="pins-layer"></div>
   </div>
+  <p id="spot-breadcrumb" class="breadcrumb"></p>
   <p class="hint">Tap anywhere on the photo to pin a note there.</p>
 </section>
 
@@ -53,6 +62,7 @@
     <textarea id="note-text" placeholder="What's stored here?" rows="3" maxlength="200"></textarea>
     <div class="sheet-actions">
       <button id="note-delete" class="btn danger hidden">Delete</button>
+      <button id="note-subspot" class="btn ghost hidden">Sub-location</button>
       <button id="note-cancel" class="btn ghost">Cancel</button>
       <button id="note-save" class="btn primary">Save</button>
     </div>
@@ -60,6 +70,24 @@
 </div>
 
 <div id="pdf-report" class="hidden"></div>
+
+<div id="ai-sheet" class="sheet hidden">
+  <div class="sheet-content">
+    <h2>AI Assist</h2>
+    <p class="sheet-help">Optional: AI can suggest likely items visible in this photo. The image is sent to the AI provider you configure.</p>
+    <div id="ai-results" class="ai-results hidden"></div>
+    <div class="sheet-actions">
+      <button id="ai-cancel" class="btn ghost">Close</button>
+      <button id="ai-run" class="btn primary">Analyze photo</button>
+    </div>
+  </div>
+</div>
+
+<nav id="bottom-nav" class="bottom-nav" aria-label="Primary navigation">
+  <button id="nav-home" class="active">⌂<span>All</span></button>
+  <button id="nav-favorites">☆<span>Favorites</span></button>
+  <button id="nav-install" class="hidden">＋<span>Install</span></button>
+</nav>
 
 <button id="add-btn" class="fab" aria-label="Add new spot">+</button>
 <input id="camera-input" type="file" accept="image/*" capture="environment" class="hidden">
