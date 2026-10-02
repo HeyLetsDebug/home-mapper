@@ -47,7 +47,6 @@ async function dbDelete(id) {
   });
 }
 
-// ---------- Small utilities ----------
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
@@ -55,7 +54,7 @@ function uid() {
 function rotationFor(id) {
   let hash = 0;
   for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) % 1000;
-  return (hash % 5) - 2; // -2deg .. +2deg, stable per spot
+  return (hash % 5) - 2;
 }
 
 function resizeImage(file, maxDim = 1400, quality = 0.82) {
@@ -95,15 +94,14 @@ function base64ToBlob(base64) {
   return fetch(base64).then((r) => r.blob());
 }
 
-// ---------- State ----------
 let spots = [];
 let currentSpot = null;
 let editingPin = null;
 let pendingPinCoords = null;
 let galleryObjectUrls = [];
 let currentSpotImageUrl = null;
+let spotDirty = false;
 
-// ---------- DOM refs ----------
 const galleryView = document.getElementById('gallery-view');
 const spotView = document.getElementById('spot-view');
 const galleryGrid = document.getElementById('gallery-grid');
@@ -113,6 +111,7 @@ const addBtn = document.getElementById('add-btn');
 const cameraInput = document.getElementById('camera-input');
 const backBtn = document.getElementById('back-btn');
 const spotLabelInput = document.getElementById('spot-label-input');
+const saveSpotBtn = document.getElementById('save-spot-btn');
 const deleteSpotBtn = document.getElementById('delete-spot-btn');
 const spotImage = document.getElementById('spot-image');
 const pinsLayer = document.getElementById('pins-layer');
@@ -125,10 +124,11 @@ const noteDelete = document.getElementById('note-delete');
 const menuBtn = document.getElementById('menu-btn');
 const menuDropdown = document.getElementById('menu-dropdown');
 const exportBtn = document.getElementById('export-btn');
+const exportPdfBtn = document.getElementById('export-pdf-btn');
 const importBtn = document.getElementById('import-btn');
 const importInput = document.getElementById('import-input');
+const pdfReport = document.getElementById('pdf-report');
 
-// ---------- Rendering ----------
 function renderGallery(filterText = '') {
   galleryObjectUrls.forEach((u) => URL.revokeObjectURL(u));
   galleryObjectUrls = [];
@@ -200,17 +200,39 @@ function renderPins() {
   });
 }
 
-// ---------- Navigation ----------
+function updateSaveButton() {
+  saveSpotBtn.textContent = spotDirty ? 'Save' : 'Saved';
+  saveSpotBtn.classList.toggle('saved', !spotDirty);
+}
+
+function markSpotDirty() {
+  spotDirty = true;
+  updateSaveButton();
+}
+
+async function saveCurrentSpot() {
+  if (!currentSpot) return;
+  currentSpot.label = spotLabelInput.value.trim();
+  await dbPut(currentSpot);
+  spotDirty = false;
+  updateSaveButton();
+  renderGallery(searchInput.value);
+}
+
 function showGallery() {
   spotView.classList.add('hidden');
   galleryView.classList.remove('hidden');
   currentSpot = null;
+  spotDirty = false;
+  updateSaveButton();
   renderGallery(searchInput.value);
 }
 
 function openSpot(id) {
   currentSpot = spots.find((s) => s.id === id);
   spotLabelInput.value = currentSpot.label || '';
+  spotDirty = false;
+  updateSaveButton();
   if (currentSpotImageUrl) URL.revokeObjectURL(currentSpotImageUrl);
   currentSpotImageUrl = URL.createObjectURL(currentSpot.imageBlob);
   spotImage.src = currentSpotImageUrl;
@@ -227,7 +249,6 @@ async function createNewSpot(file) {
   openSpot(spot.id);
 }
 
-// ---------- Note sheet ----------
 function openNoteSheet(pin) {
   editingPin = pin || null;
   noteText.value = pin ? pin.note : '';
@@ -243,7 +264,7 @@ function closeNoteSheet() {
   noteText.value = '';
 }
 
-async function saveNote() {
+function saveNote() {
   const text = noteText.value.trim();
   if (!text) { closeNoteSheet(); return; }
 
@@ -252,21 +273,110 @@ async function saveNote() {
   } else if (pendingPinCoords) {
     currentSpot.pins.push({ id: uid(), x: pendingPinCoords.x, y: pendingPinCoords.y, note: text, createdAt: Date.now() });
   }
-  await dbPut(currentSpot);
+  markSpotDirty();
   renderPins();
   closeNoteSheet();
 }
 
-async function deleteNote() {
+function deleteNote() {
   if (editingPin) {
     currentSpot.pins = currentSpot.pins.filter((p) => p.id !== editingPin.id);
-    await dbPut(currentSpot);
+    markSpotDirty();
     renderPins();
   }
   closeNoteSheet();
 }
 
-// ---------- Events ----------
+async function imageWithPins(spot) {
+  const url = URL.createObjectURL(spot.imageBlob);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = reject;
+      image.src = url;
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const radius = Math.max(16, Math.min(canvas.width, canvas.height) * 0.028);
+    const fontSize = Math.max(16, radius * 0.95);
+    spot.pins.forEach((pin, i) => {
+      const x = canvas.width * pin.x / 100;
+      const y = canvas.height * pin.y / 100;
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = '#2E4A3B';
+      ctx.fill();
+      ctx.lineWidth = Math.max(3, radius * 0.12);
+      ctx.strokeStyle = '#FFFFFF';
+      ctx.stroke();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = `700 ${fontSize}px Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(i + 1), x, y);
+    });
+    return canvas.toDataURL('image/jpeg', 0.9);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function exportPdfReport() {
+  menuDropdown.classList.add('hidden');
+  if (!spots.length) {
+    alert('Nothing to export yet.');
+    return;
+  }
+  if (currentSpot && spotDirty) await saveCurrentSpot();
+
+  pdfReport.innerHTML = '';
+  const cover = document.createElement('section');
+  cover.className = 'pdf-cover';
+  cover.innerHTML = '<h1>Where’s My Stuff</h1><p>Home inventory report</p><p>' + new Date().toLocaleDateString() + '</p>';
+  pdfReport.appendChild(cover);
+
+  for (const spot of spots) {
+    const section = document.createElement('section');
+    section.className = 'pdf-spot';
+
+    const title = document.createElement('h2');
+    title.textContent = spot.label || 'Untitled spot';
+    section.appendChild(title);
+
+    const img = document.createElement('img');
+    img.alt = spot.label || 'Storage spot';
+    img.src = await imageWithPins(spot);
+    section.appendChild(img);
+
+    const list = document.createElement('ol');
+    if (!spot.pins.length) {
+      const empty = document.createElement('p');
+      empty.textContent = 'No mapped items.';
+      section.appendChild(empty);
+    } else {
+      spot.pins.forEach((pin) => {
+        const item = document.createElement('li');
+        item.textContent = pin.note;
+        list.appendChild(item);
+      });
+      section.appendChild(list);
+    }
+
+    pdfReport.appendChild(section);
+  }
+
+  document.body.classList.add('printing-report');
+  window.addEventListener('afterprint', () => {
+    document.body.classList.remove('printing-report');
+    pdfReport.innerHTML = '';
+  }, { once: true });
+  setTimeout(() => window.print(), 100);
+}
+
 addBtn.addEventListener('click', () => cameraInput.click());
 
 cameraInput.addEventListener('change', async (e) => {
@@ -280,12 +390,23 @@ cameraInput.addEventListener('change', async (e) => {
   cameraInput.value = '';
 });
 
-backBtn.addEventListener('click', showGallery);
-
-spotLabelInput.addEventListener('change', async () => {
-  currentSpot.label = spotLabelInput.value.trim();
-  await dbPut(currentSpot);
+backBtn.addEventListener('click', async () => {
+  if (!spotDirty) {
+    showGallery();
+    return;
+  }
+  const save = confirm('You have unsaved changes. Press OK to save, or Cancel to discard them.');
+  if (save) {
+    await saveCurrentSpot();
+  } else {
+    spots = await dbGetAll();
+  }
+  showGallery();
 });
+
+saveSpotBtn.addEventListener('click', saveCurrentSpot);
+
+spotLabelInput.addEventListener('input', markSpotDirty);
 
 deleteSpotBtn.addEventListener('click', async () => {
   if (!confirm('Delete this spot and all its notes?')) return;
@@ -313,11 +434,14 @@ menuBtn.addEventListener('click', (e) => {
   e.stopPropagation();
   menuDropdown.classList.toggle('hidden');
 });
+
 document.addEventListener('click', (e) => {
   if (!menuDropdown.contains(e.target) && e.target !== menuBtn) {
     menuDropdown.classList.add('hidden');
   }
 });
+
+exportPdfBtn.addEventListener('click', exportPdfReport);
 
 exportBtn.addEventListener('click', async () => {
   menuDropdown.classList.add('hidden');
@@ -357,7 +481,6 @@ importInput.addEventListener('change', async (e) => {
   importInput.value = '';
 });
 
-// ---------- Init ----------
 (async function init() {
   spots = await dbGetAll();
   renderGallery();
