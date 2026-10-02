@@ -24,7 +24,6 @@
   <button id="export-pdf-btn">Export PDF report</button>
   <button id="export-btn">Export backup</button>
   <button id="import-btn">Import / restore backup</button>
-  <button id="ai-settings-btn">AI Assist settings</button>
   <button id="install-btn" class="hidden">Install app</button>
 </div>
 <input id="import-input" type="file" accept="application/json" class="hidden">
@@ -44,7 +43,6 @@
     <input id="spot-label-input" type="text" placeholder="Label this spot — e.g. Garage shelf" maxlength="60">
     <select id="parent-spot-select" aria-label="Parent location"><option value="">Top-level location</option></select>
     <button id="save-spot-btn" class="btn primary spot-save">Saved</button>
-    <button id="ai-btn" class="icon-btn" aria-label="AI suggestions">✨</button>
     <button id="favorite-btn" class="icon-btn" aria-label="Favorite this spot">☆</button>
     <button id="subspot-btn" class="icon-btn" aria-label="Add sub-location">＋</button>
     <button id="delete-spot-btn" class="icon-btn danger" aria-label="Delete this spot">🗑</button>
@@ -71,17 +69,6 @@
 
 <div id="pdf-report" class="hidden"></div>
 
-<div id="ai-sheet" class="sheet hidden">
-  <div class="sheet-content">
-    <h2>AI Assist</h2>
-    <p class="sheet-help">Optional: AI can suggest likely items visible in this photo. The image is sent to the AI provider you configure.</p>
-    <div id="ai-results" class="ai-results hidden"></div>
-    <div class="sheet-actions">
-      <button id="ai-cancel" class="btn ghost">Close</button>
-      <button id="ai-run" class="btn primary">Analyze photo</button>
-    </div>
-  </div>
-</div>
 
 <nav id="bottom-nav" class="bottom-nav" aria-label="Primary navigation">
   <button id="nav-home" class="active">⌂<span>All</span></button>
