@@ -28,7 +28,6 @@ html, body {
 button { font-family: inherit; }
 input, textarea { font-family: inherit; }
 
-/* ---------- Topbar ---------- */
 .topbar {
   display: flex;
   align-items: center;
@@ -59,7 +58,6 @@ input, textarea { font-family: inherit; }
 .icon-btn:active { background: rgba(0,0,0,0.06); }
 .icon-btn.danger { color: var(--danger); }
 
-/* ---------- Dropdown menu ---------- */
 .dropdown {
   position: absolute;
   top: 58px;
@@ -69,7 +67,7 @@ input, textarea { font-family: inherit; }
   box-shadow: 0 6px 20px rgba(38,36,31,0.18);
   overflow: hidden;
   z-index: 25;
-  min-width: 170px;
+  min-width: 190px;
 }
 .dropdown button {
   display: block;
@@ -84,7 +82,6 @@ input, textarea { font-family: inherit; }
 .dropdown button:active { background: var(--paper); }
 .dropdown button + button { border-top: 1px solid var(--line); }
 
-/* ---------- Search ---------- */
 .search-bar { padding: 6px 16px 14px; }
 #search-input {
   width: 100%;
@@ -98,7 +95,6 @@ input, textarea { font-family: inherit; }
 #search-input:focus { outline: none; border-color: var(--pin); }
 #search-input::placeholder { color: var(--ink-soft); }
 
-/* ---------- Gallery ---------- */
 .view { min-height: 100vh; padding-bottom: 110px; }
 
 .gallery-grid {
@@ -166,7 +162,6 @@ input, textarea { font-family: inherit; }
   max-width: 320px;
 }
 
-/* ---------- Spot detail view ---------- */
 .spot-header {
   display: flex;
   align-items: center;
@@ -190,6 +185,17 @@ input, textarea { font-family: inherit; }
 #spot-label-input::placeholder { color: var(--ink-soft); }
 #spot-label-input:focus { outline: none; }
 
+.spot-save {
+  margin-left: 0 !important;
+  padding: 8px 12px;
+  min-width: 62px;
+  font-size: 0.82rem;
+}
+.spot-save.saved {
+  background: var(--line);
+  color: var(--ink-soft);
+}
+
 .image-wrap {
   position: relative;
   width: 100%;
@@ -209,7 +215,6 @@ input, textarea { font-family: inherit; }
   margin: 14px 30px 0;
 }
 
-/* Pushpin marker */
 .pin {
   position: absolute;
   width: 30px;
@@ -230,7 +235,6 @@ input, textarea { font-family: inherit; }
 }
 .pin:active { transform: scale(0.9); }
 
-/* ---------- Note sheet ---------- */
 .sheet {
   position: fixed;
   inset: 0;
@@ -276,7 +280,6 @@ input, textarea { font-family: inherit; }
 .btn.ghost { background: transparent; color: var(--ink-soft); }
 .btn.danger { background: transparent; color: var(--danger); padding-left: 0; }
 
-/* ---------- FAB ---------- */
 .fab {
   position: fixed;
   bottom: 26px;
@@ -296,6 +299,60 @@ input, textarea { font-family: inherit; }
   z-index: 20;
 }
 .fab:active { transform: scale(0.94); }
+
+#pdf-report { display: none; }
+body.printing-report > *:not(#pdf-report) { display: none !important; }
+body.printing-report #pdf-report {
+  display: block;
+  background: #fff;
+  color: #26241F;
+  font-family: Arial, sans-serif;
+  min-height: 100vh;
+  padding: 28px;
+}
+.pdf-cover {
+  min-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  page-break-after: always;
+}
+.pdf-cover h1 { font-size: 30px; margin: 0 0 10px; }
+.pdf-cover p { margin: 5px 0; color: #666; }
+.pdf-spot {
+  page-break-after: always;
+  break-after: page;
+}
+.pdf-spot:last-child { page-break-after: auto; }
+.pdf-spot h2 {
+  font-size: 22px;
+  margin: 0 0 14px;
+}
+.pdf-spot img {
+  display: block;
+  width: 100%;
+  max-height: 62vh;
+  object-fit: contain;
+  margin-bottom: 18px;
+}
+.pdf-spot ol {
+  margin: 0;
+  padding-left: 24px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.pdf-spot li { margin-bottom: 7px; }
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+  body.printing-report #pdf-report { padding: 0; }
+  .pdf-cover { min-height: 260mm; }
+}
 
 @media (prefers-reduced-motion: reduce) {
   .spot-card, .fab, .pin { transition: none; }
