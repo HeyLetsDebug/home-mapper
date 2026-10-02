@@ -103,7 +103,6 @@ let currentSpotImageUrl = null;
 let spotDirty = false;
 let viewMode = 'all';
 let deferredInstallPrompt = null;
-let aiBusy = false;
 
 const galleryView = document.getElementById('gallery-view');
 const spotView = document.getElementById('spot-view');
@@ -120,12 +119,6 @@ const favoriteBtn = document.getElementById('favorite-btn');
 const subspotBtn = document.getElementById('subspot-btn');
 const parentSpotSelect = document.getElementById('parent-spot-select');
 const spotBreadcrumb = document.getElementById('spot-breadcrumb');
-const aiBtn = document.getElementById('ai-btn');
-const aiSheet = document.getElementById('ai-sheet');
-const aiRun = document.getElementById('ai-run');
-const aiCancel = document.getElementById('ai-cancel');
-const aiResults = document.getElementById('ai-results');
-const aiSettingsBtn = document.getElementById('ai-settings-btn');
 const installBtn = document.getElementById('install-btn');
 const navHome = document.getElementById('nav-home');
 const navFavorites = document.getElementById('nav-favorites');
@@ -186,18 +179,6 @@ function renderParentOptions() {
 function updateFavoriteButton() {
   favoriteBtn.textContent = currentSpot?.favorite ? '★' : '☆';
   favoriteBtn.classList.toggle('selected', !!currentSpot?.favorite);
-}
-
-function setAISettings() {
-  const key = prompt('Enter your OpenAI API key for optional AI Assist. It is stored only on this device. Leave blank to disable AI Assist.');
-  if (key === null) return;
-  if (!key.trim()) {
-    localStorage.removeItem('homeInventoryAiKey');
-    alert('AI Assist disabled.');
-    return;
-  }
-  localStorage.setItem('homeInventoryAiKey', key.trim());
-  alert('AI Assist is ready on this device.');
 }
 
 function renderGallery(filterText = '') {
@@ -431,50 +412,64 @@ async function exportPdfReport() {
   }
   if (currentSpot && spotDirty) await saveCurrentSpot();
 
-  pdfReport.innerHTML = '';
-  const cover = document.createElement('section');
-  cover.className = 'pdf-cover';
+  const printWindow = window.open('', '_blank', 'noopener,noreferrer');
+  if (!printWindow) {
+    alert('Please allow pop-ups for this site to export the PDF.');
+    return;
+  }
+
+  printWindow.document.open();
+  printWindow.document.write('<!doctype html><html><head><title>Where’s My Stuff</title><style>body{font-family:Arial,sans-serif;color:#26241F;margin:0} .cover{height:92vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;page-break-after:always}.cover h1{font-size:30px;margin:0 0 10px}.cover p{margin:5px 0;color:#666}.spot{page-break-after:always;break-after:page}.spot:last-child{page-break-after:auto}.spot h2{font-size:22px;margin:0 0 14px}.spot img{display:block;width:100%;max-height:62vh;object-fit:contain;margin-bottom:18px}.spot ol{margin:0;padding-left:24px;font-size:14px;line-height:1.5}.spot li{margin-bottom:7px}@page{size:A4;margin:12mm}</style></head><body><div id="report"></div></body></html>');
+  printWindow.document.close();
+
+  const report = printWindow.document.getElementById('report');
+  const cover = printWindow.document.createElement('section');
+  cover.className = 'cover';
   cover.innerHTML = '<h1>Where’s My Stuff</h1><p>Home inventory report</p><p>' + new Date().toLocaleDateString() + '</p>';
-  pdfReport.appendChild(cover);
+  report.appendChild(cover);
 
   for (const spot of spots) {
-    const section = document.createElement('section');
-    section.className = 'pdf-spot';
+    const section = printWindow.document.createElement('section');
+    section.className = 'spot';
 
-    const title = document.createElement('h2');
-    title.textContent = spot.label || 'Untitled spot';
+    const title = printWindow.document.createElement('h2');
+    title.textContent = breadcrumbText(spot);
     section.appendChild(title);
 
-    const img = document.createElement('img');
+    const img = printWindow.document.createElement('img');
     img.alt = spot.label || 'Storage spot';
     img.src = await imageWithPins(spot);
     section.appendChild(img);
 
-    const list = document.createElement('ol');
-    if (!spot.pins.length) {
-      const empty = document.createElement('p');
-      empty.textContent = 'No mapped items.';
-      section.appendChild(empty);
-    } else {
+    if (spot.pins.length) {
+      const list = printWindow.document.createElement('ol');
       spot.pins.forEach((pin) => {
-        const item = document.createElement('li');
+        const item = printWindow.document.createElement('li');
         item.textContent = pin.note;
         list.appendChild(item);
       });
       section.appendChild(list);
+    } else {
+      const empty = printWindow.document.createElement('p');
+      empty.textContent = 'No mapped items.';
+      section.appendChild(empty);
     }
 
-    pdfReport.appendChild(section);
+    report.appendChild(section);
   }
 
-  document.body.classList.add('printing-report');
-  window.addEventListener('afterprint', () => {
-    document.body.classList.remove('printing-report');
-    pdfReport.innerHTML = '';
-  }, { once: true });
-  setTimeout(() => window.print(), 100);
-}
+  const images = Array.from(report.querySelectorAll('img'));
+  await Promise.all(images.map((img) => img.complete ? Promise.resolve() : new Promise((resolve) => {
+    img.onload = resolve;
+    img.onerror = resolve;
+  })));
 
+  printWindow.focus();
+  setTimeout(() => {
+    printWindow.print();
+    printWindow.addEventListener('afterprint', () => printWindow.close(), { once: true });
+  }, 250);
+}
 addBtn.addEventListener('click', () => cameraInput.click());
 
 cameraInput.addEventListener('change', async (e) => {
@@ -561,73 +556,6 @@ subspotInput.addEventListener('change', async (e) => {
 });
 
 spotLabelInput.addEventListener('input', markSpotDirty);
-
-aiBtn.addEventListener('click', () => {
-  aiResults.classList.add('hidden');
-  aiResults.innerHTML = '';
-  aiSheet.classList.remove('hidden');
-});
-
-aiCancel.addEventListener('click', () => aiSheet.classList.add('hidden'));
-aiSettingsBtn.addEventListener('click', () => {
-  menuDropdown.classList.add('hidden');
-  setAISettings();
-});
-
-aiRun.addEventListener('click', async () => {
-  if (aiBusy || !currentSpot) return;
-  const key = localStorage.getItem('homeInventoryAiKey');
-  if (!key) {
-    setAISettings();
-    return;
-  }
-  aiBusy = true;
-  aiRun.disabled = true;
-  aiRun.textContent = 'Analyzing…';
-  try {
-    const image = await blobToBase64(currentSpot.imageBlob);
-    const response = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
-      body: JSON.stringify({
-        model: 'gpt-6-luna',
-        input: [{ role: 'user', content: [
-          { type: 'input_text', text: 'Look at this storage photo. Suggest up to 8 clearly visible household items that could be useful as inventory notes. Return only a simple JSON array of strings. Do not guess hidden or unreadable items.' },
-          { type: 'input_image', image_url: image }
-        ] }]
-      })
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error?.message || 'AI request failed');
-    const raw = data.output_text || '';
-    let suggestions = [];
-    try { suggestions = JSON.parse(raw); } catch { suggestions = raw.split('\\n').map((x) => x.replace(/^[-*•\\d.]+\\s*/, '').trim()).filter(Boolean); }
-    aiResults.innerHTML = '';
-    if (!suggestions.length) {
-      aiResults.textContent = 'No clear items detected.';
-    } else {
-      suggestions.slice(0, 8).forEach((suggestion) => {
-        const button = document.createElement('button');
-        button.className = 'ai-suggestion';
-        button.textContent = suggestion;
-        button.addEventListener('click', () => {
-          aiSheet.classList.add('hidden');
-          pendingPinCoords = null;
-          openNoteSheet(null);
-          noteText.value = suggestion;
-        });
-        aiResults.appendChild(button);
-      });
-    }
-    aiResults.classList.remove('hidden');
-  } catch (err) {
-    alert('AI Assist failed: ' + err.message);
-  } finally {
-    aiBusy = false;
-    aiRun.disabled = false;
-    aiRun.textContent = 'Analyze photo';
-  }
-});
 
 deleteSpotBtn.addEventListener('click', async () => {
   if (!confirm('Delete this spot and all its notes?')) return;
