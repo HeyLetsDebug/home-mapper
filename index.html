@@ -20,6 +20,7 @@
 </header>
 
 <div id="menu-dropdown" class="dropdown hidden">
+  <button id="export-pdf-btn">Export PDF report</button>
   <button id="export-btn">Export backup</button>
   <button id="import-btn">Import backup</button>
 </div>
@@ -37,6 +38,7 @@
   <div class="spot-header">
     <button id="back-btn" class="icon-btn" aria-label="Back">←</button>
     <input id="spot-label-input" type="text" placeholder="Label this spot — e.g. Garage shelf" maxlength="60">
+    <button id="save-spot-btn" class="btn primary spot-save">Saved</button>
     <button id="delete-spot-btn" class="icon-btn danger" aria-label="Delete this spot">🗑</button>
   </div>
   <div id="image-wrap" class="image-wrap">
@@ -56,6 +58,8 @@
     </div>
   </div>
 </div>
+
+<div id="pdf-report" class="hidden"></div>
 
 <button id="add-btn" class="fab" aria-label="Add new spot">+</button>
 <input id="camera-input" type="file" accept="image/*" capture="environment" class="hidden">
